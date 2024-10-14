@@ -36,7 +36,7 @@ def upload_file():
                     tables[user_id] = user_table_html
 
                 # Pass the grouped tables to the template
-                return render_template('display.html', tables=tables)
+                return render_template('display.html', tables=tables, title="Records Details")
 
             elif action == 'attendance':
                 # Summarize data
@@ -54,7 +54,7 @@ def upload_file():
                     user_table_html = highlight_incomplete_rows(group, user_table_html)
                     tables[user_id] = user_table_html
 
-                return render_template('display.html', tables=tables)
+                return render_template('display.html', tables=tables, title="Attendance")
         else:
             return render_template('upload.html', error='Invalid file format. Please upload a CSV file.')
 
