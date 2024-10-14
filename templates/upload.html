@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Please Upload the Attendance CSV File</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1>Upload a CSV File</h1>
+        <p>Please upload an attendance CSV file. The file should have columns such as 'User ID', 'State', 'Verify Mode', and 'DateTime'.</p>
+
+        <form method="POST" enctype="multipart/form-data">
+            <div class="mb-3">
+                <input class="form-control" type="file" name="file" required>
+            </div>
+            <!-- Two buttons for different display modes -->
+            <button type="submit" name="action" value="details" class="btn btn-primary">Display Details</button>
+            <button type="submit" name="action" value="attendance" class="btn btn-secondary">Display Attendance</button>
+        </form>
+    </div>
+</body>
+</html>
