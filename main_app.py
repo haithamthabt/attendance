@@ -85,30 +85,36 @@ def summary(df=None):
             summary_rows = []
             for date, day_data in group.groupby('Date'):
                 # Identify the first Clock In and last Clock Out
-                clock_in = day_data[day_data['Record Type'] == 'Clock In']['DateTime'].min()
+                actual_clock_in = day_data[day_data['Record Type'] == 'Clock In']['DateTime'].min()
                 clock_out = day_data[day_data['Record Type'] == 'Clock Out']['DateTime'].max()
 
-                # Calculate total break time (sum of all breaks)
-                break_time = pd.Timedelta(0)  # Initialize break time
-                breaks = day_data[day_data['Record Type'].isin(['Break Start', 'Break End'])]
+                # Adjust Clock In for calculation purposes only if it's before 8:00 AM
+                work_start_time = pd.Timestamp(year=actual_clock_in.year, month=actual_clock_in.month, day=actual_clock_in.day, hour=8, minute=0)
+                clock_in_for_calculation = actual_clock_in if actual_clock_in >= work_start_time else work_start_time
 
-                # Pair break starts and ends, and calculate the sum of all break times
+                # Calculate total break time (sum of all breaks)
+                break_time = pd.Timedelta(0)
+                breaks = day_data[day_data['Record Type'].isin(['Break Start', 'Break End'])]
                 for i in range(0, len(breaks), 2):
                     if i + 1 < len(breaks):  # Ensure there is a pair (Break Start followed by Break End)
                         break_start = breaks.iloc[i]['DateTime']
                         break_end = breaks.iloc[i + 1]['DateTime']
-                        break_time += break_end - break_start  # Add the break duration to the total break time
+                        break_time += break_end - break_start
 
-                # Calculate total working hours (Clock Out - Clock In - Break Time)
-                working_hours = clock_out - clock_in - break_time
+                # Calculate total working hours (Clock Out - Adjusted Clock In - Break Time)
+                working_hours = clock_out - clock_in_for_calculation - break_time
+
+                # Format the break time and working hours to HH:MM
+                formatted_break_time = f"{break_time.components.hours:02}:{break_time.components.minutes:02}"
+                formatted_working_hours = f"{working_hours.components.hours:02}:{working_hours.components.minutes:02}"
 
                 # Add the summary row for this day
                 summary_rows.append({
                     'Date': date,
-                    'Clock In': clock_in,
+                    'Clock In': actual_clock_in,  # Display the actual clock-in time
                     'Clock Out': clock_out,
-                    'Break Time': break_time,
-                    'Working Hours': working_hours
+                    'Break Time': formatted_break_time,
+                    'Working Hours': formatted_working_hours
                 })
 
             # Convert the summary rows to a DataFrame and generate HTML
@@ -122,7 +128,6 @@ def summary(df=None):
     except Exception as e:
         # If any error occurs, display the error message
         return f"Error displaying the summary: {str(e)}"
-
 
 
 #----------------------------------------------------------------------------
