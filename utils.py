@@ -14,7 +14,7 @@ def read_and_clean_csv(filepath):
     df = pd.read_csv(filepath)
 
     # Drop unnecessary columns
-    df = df.drop(['State', 'Verify Mode'], axis=1)
+    df = drop_column_variants(df)  # Drop variations of 'State' and 'Verify Mode'
 
     # Convert 'DateTime' to datetime type
     df['DateTime'] = pd.to_datetime(df['DateTime'], errors='coerce')
@@ -90,65 +90,6 @@ def highlight_incomplete_rows(df, df_html):
     return '\n'.join(row_html)
 
 #--------------------------------------------------
-def calculate_working_hours_and_breaks(df):
-    # Ensure the 'DateTime' column is in datetime format
-    df['DateTime'] = pd.to_datetime(df['DateTime'], errors='coerce')
-
-    # Create a new DataFrame with all dates between the first and last date
-    all_dates = pd.date_range(start=df['DateTime'].min().date(), end=df['DateTime'].max().date())
-
-    # Initialize a summary DataFrame
-    summary_df = pd.DataFrame(all_dates, columns=['Date'])
-
-    # Add day of the week
-    summary_df['DayOfWeek'] = summary_df['Date'].dt.day_name()
-
-    # Mark Fridays
-    summary_df['IsFriday'] = summary_df['DayOfWeek'] == 'Friday'
-
-    # Group the original DataFrame by 'User ID' and 'Date' to calculate working hours and breaks
-    df['Date'] = df['DateTime'].dt.date  # Extract the date
-    grouped = df.groupby(['User ID', 'Date'])
-
-    working_hours = []
-    break_times = []
-
-    # Calculate working hours and breaks for each date
-    for date in all_dates:
-        day_data = df[df['Date'] == date.date()]
-
-        if len(day_data) > 0:
-            # Assume first record is Clock In and last is Clock Out
-            first_clock_in = day_data['DateTime'].min()
-            last_clock_out = day_data['DateTime'].max()
-
-            # Calculate total working hours
-            total_work = last_clock_out - first_clock_in
-
-            # Only calculate break time if 'Record Type' exists in the subset
-            if 'Record Type' in day_data.columns:
-                break_time = day_data[(day_data['Record Type'] == 'Break Start') | (day_data['Record Type'] == 'Break End')]
-                total_break = pd.Timedelta(0)  # Initialize break time
-
-                # Iterate through break start and end pairs
-                for i in range(0, len(break_time), 2):
-                    if i + 1 < len(break_time):
-                        total_break += break_time.iloc[i + 1]['DateTime'] - break_time.iloc[i]['DateTime']
-            else:
-                total_break = pd.Timedelta(0)  # No break time if 'Record Type' is missing
-
-            working_hours.append(total_work)
-            break_times.append(total_break)
-        else:
-            working_hours.append(pd.NaT)  # No data for this day
-            break_times.append(pd.NaT)
-
-    # Add the calculated working hours and break times to the summary
-    summary_df['WorkingHours'] = working_hours
-    summary_df['BreakTime'] = break_times
-
-    return summary_df
-
 
 #--------------------------------------------------
 def highlight_fridays(df_html):
@@ -159,6 +100,25 @@ def highlight_fridays(df_html):
     return '\n'.join(row_html)
 
 #--------------------------------------------------
+def drop_column_variants(df):
+    # Define possible variations for 'State' and 'Verify Mode'
+    state_variants = ['State', 'state', 'STATE']
+    verify_mode_variants = ['Verify Mode', 'VerifyMode', 'VERIFyMODE', 'Verify_Mode', 'verifyMode', 'verifymode', 'Verifymode']
+
+    # Drop 'State' column variations if they exist
+    for variant in state_variants:
+        if variant in df.columns:
+            df = df.drop(variant, axis=1)
+            break  # Stop once a matching column is found and dropped
+
+    # Drop 'Verify Mode' column variations if they exist
+    for variant in verify_mode_variants:
+        if variant in df.columns:
+            df = df.drop(variant, axis=1)
+            break  # Stop once a matching column is found and dropped
+
+    return df
+
 
 #--------------------------------------------------
 

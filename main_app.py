@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request
 import os
-from utils import save_uploaded_file, read_and_clean_csv, process_dataframe, highlight_incomplete_rows, calculate_working_hours_and_breaks, highlight_fridays
+from utils import save_uploaded_file, read_and_clean_csv, process_dataframe, highlight_incomplete_rows, highlight_fridays
 import pandas as pd
 app = Flask(__name__)
 
