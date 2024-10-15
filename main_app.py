@@ -99,12 +99,31 @@ def summary(df=None):
                     if i + 1 < len(breaks):  # Ensure there is a pair (Break Start followed by Break End)
                         break_start = breaks.iloc[i]['DateTime']
                         break_end = breaks.iloc[i + 1]['DateTime']
-                        break_time += break_end - break_start
+                        break_time += break_end - break_start  # Add the break duration to the total break time
 
-                # Calculate total working hours (Clock Out - Adjusted Clock In - Break Time)
+                # Enforce 30 minutes break rule
+                allowed_break_time = pd.Timedelta(minutes=30)  # The allowed break time
+                if break_time < allowed_break_time:
+                    break_time = allowed_break_time
+                elif break_time > allowed_break_time:
+                    extra_break_time = break_time - allowed_break_time
+                else:
+                    extra_break_time = pd.Timedelta(0)
+
+                # Calculate total working hours (Clock Out - Adjusted Clock In - 30-minute Break or more)
                 working_hours = clock_out - clock_in_for_calculation - break_time
 
-                # Format the break time and working hours to HH:MM
+                # Define the expected working hours (7.5 hours)
+                expected_working_hours = pd.Timedelta(hours=7, minutes=30)
+
+                # Check for time shortage
+                if working_hours < expected_working_hours:
+                    time_shortage = expected_working_hours - working_hours
+                    shortage_flag = f"Short by {time_shortage.components.hours}h {time_shortage.components.minutes}m"
+                else:
+                    shortage_flag = "No"
+
+                # Format the break time, working hours, and shortage
                 formatted_break_time = f"{break_time.components.hours:02}:{break_time.components.minutes:02}"
                 formatted_working_hours = f"{working_hours.components.hours:02}:{working_hours.components.minutes:02}"
 
@@ -114,12 +133,17 @@ def summary(df=None):
                     'Clock In': actual_clock_in,  # Display the actual clock-in time
                     'Clock Out': clock_out,
                     'Break Time': formatted_break_time,
-                    'Working Hours': formatted_working_hours
+                    'Working Hours': formatted_working_hours,
+                    'Shortage': shortage_flag  # Simply display the shortage without highlighting
                 })
 
-            # Convert the summary rows to a DataFrame and generate HTML
+            # Convert the summary rows to a DataFrame
             summary_df = pd.DataFrame(summary_rows)
+
+            # Generate the HTML without highlighting logic
             summary_df_html = summary_df.to_html(classes='table table-striped', index=False)
+
+            # Add to the user-specific table
             tables[user_id] = summary_df_html
 
         # Pass the tables to the template
@@ -128,6 +152,8 @@ def summary(df=None):
     except Exception as e:
         # If any error occurs, display the error message
         return f"Error displaying the summary: {str(e)}"
+
+
 
 
 #----------------------------------------------------------------------------
