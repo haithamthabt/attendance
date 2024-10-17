@@ -89,13 +89,14 @@ def summary(df=None):
         # Initialize the summary table for each employee
         tables = {}
         for user_id, group in df.groupby('User ID'):
-            summary_df, total_working_hours_str = summarize_employee_data(group)
+            summary_df, total_working_hours_str, total_shortage_str = summarize_employee_data(group)
 
             # Generate the HTML for the employee's summary
             summary_df_html = summary_df.to_html(classes='table table-striped', index=False)
 
-            # Append total working hours to the bottom of the table
-            summary_df_html += f"<tfoot><tr><td colspan='4'><strong>Total Working Hours:</strong></td><td colspan='2'>{total_working_hours_str}</td></tr></tfoot>"
+            # Append total working hours and total shortage to the bottom of the table
+            summary_df_html += f"<tfoot><tr><td colspan='4'><strong>Total Working Hours:</strong></td><td colspan='2'>{total_working_hours_str}</td></tr>"
+            summary_df_html += f"<tr><td colspan='4'><strong>Total Shortage:</strong></td><td colspan='2'>{total_shortage_str}</td></tr></tfoot>"
 
             # Add to the user-specific table
             tables[user_id] = summary_df_html
