@@ -102,13 +102,18 @@ def summarize_employee_data(group):
         clock_out = day_data[day_data['Record Type'] == 'Clock Out']['DateTime'].max()
         day_of_week = pd.Timestamp(date).strftime('%A')
 
+        # Calculate total break time
         break_time = calculate_break_time(day_data)
-        break_time = enforce_break_rule(break_time)
-        working_hours = calculate_working_hours(day_data, actual_clock_in, clock_out, break_time)
 
+        # Enforce the 30-minute break rule but only deduct it from working hours
+        enforced_break_time = enforce_break_rule(break_time)
+        working_hours = calculate_working_hours(day_data, actual_clock_in, clock_out, enforced_break_time)
+
+        # Cap the total working hours for the day at 8 hours (7.5 working hours + 30 minutes break)
         capped_total_working_hours = min(working_hours + pd.Timedelta(minutes=30), pd.Timedelta(hours=8))
         total_working_seconds += capped_total_working_hours.total_seconds()
 
+        # Display the actual break time, but use the enforced break time for working hours deduction
         formatted_break_time = f"{break_time.components.hours:02}:{break_time.components.minutes:02}"
         formatted_working_hours = f"{working_hours.components.hours:02}:{working_hours.components.minutes:02}"
 
@@ -119,16 +124,20 @@ def summarize_employee_data(group):
         else:
             shortage_flag = "No"
 
+        # Add the summary row for this day
         summary_rows.append({
             'Date': f"{date} ({day_of_week})",
             'Clock In': actual_clock_in,
             'Clock Out': clock_out,
-            'Break Time': formatted_break_time,
+            'Break Time': formatted_break_time,  # Display actual break time
             'Working Hours': formatted_working_hours,
             'Shortage': shortage_flag
         })
 
+    # Convert the summary rows to a DataFrame
     summary_df = pd.DataFrame(summary_rows)
+
+    # Convert total working seconds back to hours and minutes for display
     total_hours = total_working_seconds // 3600
     total_minutes = (total_working_seconds % 3600) // 60
     total_working_hours_str = f"{int(total_hours)}h {int(total_minutes)}m"
