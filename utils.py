@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 
+#--------------------------------------------------
 # Helper function to save the uploaded file
 def save_uploaded_file(file, upload_folder):
     filepath = os.path.join(upload_folder, file.filename)
@@ -8,7 +9,6 @@ def save_uploaded_file(file, upload_folder):
     return filepath
 
 #--------------------------------------------------
-
 # Helper function to read and clean CSV data
 def read_and_clean_csv(filepath):
     df = pd.read_csv(filepath)
@@ -28,7 +28,6 @@ def read_and_clean_csv(filepath):
     return df
 
 #--------------------------------------------------
-
 # Function to assign record types
 def assign_record_type(df):
     record_types = []
@@ -47,113 +46,143 @@ def assign_record_type(df):
     return record_types
 
 #--------------------------------------------------
-
 # Function to mark incomplete days
 def mark_incomplete_days(df):
-    # Group data by User ID and Date and count records
     record_counts = df.groupby(['User ID', 'Date']).size()
-
-    # Find days with odd number of records
     odd_record_days = record_counts[record_counts % 2 != 0]
-
-    # Mark incomplete days
     df['Incomplete'] = df.apply(
         lambda row: 'Yes' if (row['User ID'], row['Date']) in odd_record_days.index else 'No', axis=1
     )
     return df
 
 #--------------------------------------------------
-
-# New function that processes the dataframe by calling both assign_record_type and mark_incomplete_days
+# Function to process the dataframe (combining record assignment and incomplete day marking)
 def process_dataframe(df):
     df['Record Type'] = assign_record_type(df)
     df = mark_incomplete_days(df)
     return df
 
 #--------------------------------------------------
+# Helper function to calculate break time for each day
+def calculate_break_time(day_data):
+    break_time = pd.Timedelta(0)
+    breaks = day_data[day_data['Record Type'].isin(['Break Start', 'Break End'])]
+    for i in range(0, len(breaks), 2):
+        if i + 1 < len(breaks):
+            break_start = breaks.iloc[i]['DateTime']
+            break_end = breaks.iloc[i + 1]['DateTime']
+            break_time += break_end - break_start
+    return break_time
 
-# Helper function to modify HTML and add custom CSS classes
+#--------------------------------------------------
+# Helper function to enforce the 30-minute break rule
+def enforce_break_rule(break_time):
+    allowed_break_time = pd.Timedelta(minutes=30)
+    if break_time < allowed_break_time:
+        return allowed_break_time
+    else:
+        return pd.Timedelta(minutes=round(break_time.total_seconds() / 60))
+
+#--------------------------------------------------
+# Helper function to calculate working hours (including clock-in adjustment for before 8:00 AM)
+def calculate_working_hours(day_data, clock_in, clock_out, break_time):
+    work_start_time = pd.Timestamp(year=clock_in.year, month=clock_in.month, day=clock_in.day, hour=8, minute=0)
+    clock_in_for_calculation = clock_in if clock_in >= work_start_time else work_start_time
+    working_hours = clock_out - clock_in_for_calculation - break_time
+    return pd.Timedelta(minutes=round(working_hours.total_seconds() / 60))
+
+#--------------------------------------------------
+# Helper function to calculate and summarize data for each employee
+def summarize_employee_data(group):
+    summary_rows = []
+    total_working_seconds = 0
+
+    for date, day_data in group.groupby('Date'):
+        actual_clock_in = day_data[day_data['Record Type'] == 'Clock In']['DateTime'].min()
+        clock_out = day_data[day_data['Record Type'] == 'Clock Out']['DateTime'].max()
+        day_of_week = pd.Timestamp(date).strftime('%A')
+
+        break_time = calculate_break_time(day_data)
+        break_time = enforce_break_rule(break_time)
+        working_hours = calculate_working_hours(day_data, actual_clock_in, clock_out, break_time)
+
+        capped_total_working_hours = min(working_hours + pd.Timedelta(minutes=30), pd.Timedelta(hours=8))
+        total_working_seconds += capped_total_working_hours.total_seconds()
+
+        formatted_break_time = f"{break_time.components.hours:02}:{break_time.components.minutes:02}"
+        formatted_working_hours = f"{working_hours.components.hours:02}:{working_hours.components.minutes:02}"
+
+        expected_working_hours = pd.Timedelta(hours=7, minutes=30)
+        if working_hours < expected_working_hours:
+            time_shortage = expected_working_hours - working_hours
+            shortage_flag = f"Short by {time_shortage.components.hours}h {time_shortage.components.minutes}m"
+        else:
+            shortage_flag = "No"
+
+        summary_rows.append({
+            'Date': f"{date} ({day_of_week})",
+            'Clock In': actual_clock_in,
+            'Clock Out': clock_out,
+            'Break Time': formatted_break_time,
+            'Working Hours': formatted_working_hours,
+            'Shortage': shortage_flag
+        })
+
+    summary_df = pd.DataFrame(summary_rows)
+    total_hours = total_working_seconds // 3600
+    total_minutes = (total_working_seconds % 3600) // 60
+    total_working_hours_str = f"{int(total_hours)}h {int(total_minutes)}m"
+
+    return summary_df, total_working_hours_str
+
+#--------------------------------------------------
+# Helper function to highlight incomplete rows
 def highlight_incomplete_rows(df, df_html):
-    # Split the HTML into lines
     row_html = df_html.splitlines()
-
-    # Identify all <tr> lines in the HTML table
     row_counter = 0
     for i, line in enumerate(row_html):
-        if '<tr>' in line:  # Look for the start of each row in the HTML
-            if df.iloc[row_counter]['Incomplete'] == 'Yes':  # Check if the corresponding DataFrame row is marked as 'Yes'
-                # Add the class to the <tr> tag
+        if '<tr>' in line:
+            if df.iloc[row_counter]['Incomplete'] == 'Yes':
                 row_html[i] = line.replace('<tr>', '<tr class="incomplete-row">')
-            row_counter += 1  # Move to the next row in the DataFrame
-
-    # Join the modified HTML lines back together
+            row_counter += 1
     return '\n'.join(row_html)
 
 #--------------------------------------------------
-
-#--------------------------------------------------
+# Helper function to highlight Fridays
 def highlight_fridays(df_html):
     row_html = df_html.splitlines()
     for i, line in enumerate(row_html):
-        if 'Friday' in line:  # Identify rows that contain 'Friday'
-            row_html[i] = line.replace('<tr>', '<tr class="friday-row">')  # Add class for styling
+        if 'Friday' in line:
+            row_html[i] = line.replace('<tr>', '<tr class="friday-row">')
     return '\n'.join(row_html)
 
 #--------------------------------------------------
+# Helper function to drop variants of 'State' and 'Verify Mode' columns
 def drop_column_variants(df):
-    # Define possible variations for 'State' and 'Verify Mode'
     state_variants = ['State', 'state', 'STATE']
-    verify_mode_variants = ['Verify Mode', 'VerifyMode', 'VERIFyMODE', 'Verify_Mode', 'verifyMode', 'verifymode', 'Verifymode']
+    verify_mode_variants = ['Verify Mode', 'VerifyMode', 'Verify_Mode', 'verifyMode', 'verifymode', 'Verifymode']
 
-    # Drop 'State' column variations if they exist
     for variant in state_variants:
         if variant in df.columns:
             df = df.drop(variant, axis=1)
-            break  # Stop once a matching column is found and dropped
+            break
 
-    # Drop 'Verify Mode' column variations if they exist
     for variant in verify_mode_variants:
         if variant in df.columns:
             df = df.drop(variant, axis=1)
-            break  # Stop once a matching column is found and dropped
+            break
 
     return df
-
-
 #--------------------------------------------------
-
 #--------------------------------------------------
-
 #--------------------------------------------------
-
 #--------------------------------------------------
-
 #--------------------------------------------------
-
 #--------------------------------------------------
-
 #--------------------------------------------------
-
 #--------------------------------------------------
-
 #--------------------------------------------------
-
 #--------------------------------------------------
-
 #--------------------------------------------------
-
 #--------------------------------------------------
-
 #--------------------------------------------------
-
-#--------------------------------------------------
-
-#--------------------------------------------------
-
-#--------------------------------------------------
-
-#--------------------------------------------------
-
-#--------------------------------------------------
-
-
